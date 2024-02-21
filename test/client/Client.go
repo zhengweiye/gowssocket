@@ -13,7 +13,7 @@ var wsClient *gowssocket.WsClient
 func main() {
 	wsClient = gowssocket.NewWsClient()
 	wsClient.SetHandler(NewMyHandler())
-	err := wsClient.Connect("ws://127.0.0.1:8888/ws?groupId=123")
+	err := wsClient.Connect("ws://127.0.0.1:8888/ws1?groupId=123")
 	if err != nil {
 		panic(err)
 	}

@@ -99,7 +99,7 @@ func (c *Connection) Close(err error) {
 	// 通知read()和write()都退出
 	//TODO read()异常-->调用Close()-->close(c.closeChan)-->write()监听到退出-->调用Close()....
 	//TODO write()异常-->调用Close()-->close(c.closeChan)-->怎么通知read()也退出呢？
-	close(c.closeChan)
+	close(c.closeChan) //TODO 必须先关闭这个
 
 	// 关闭dataChan
 	close(c.dataChan)
@@ -243,6 +243,13 @@ func (c *Connection) GetConnectionManager() *ConnectionManager {
 		return nil
 	}
 	return c.wsServer.connectionManager
+}
+
+func (c *Connection) GetServerName() string {
+	if c.wsClient != nil {
+		return ""
+	}
+	return c.wsServer.Name
 }
 
 func (c *Connection) heartBeatFunc() {

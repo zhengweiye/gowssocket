@@ -12,12 +12,15 @@
   * java定时线程---遇到ws时间不对
 * handler异常，是否导致服务停止 or conn停止
 * conn关闭，还调用send()方法，服务端和客户端是否会导致服务停止
-* 信号量监听
-  * 关闭manager的chan
-  * ....
 * 客户端：发送数据时，发现连接断开，那么先连接再发送
 * 一个url（controller方法）
   * 每个人请求一次，属于一个Connection（客户端）
   * 一个人只请求一次（不包含：断开重连），不类似http模式，一个人连多次
 * 多个url（controller方法）
   * 那么对应前端/客户端来说，是否可以共用同一个client呢？如果不能，那么感觉有点麻烦
+* 同一个url
+  * 无论多少人连进来（客户端），NewServer()和SetHandler()只会执行一次
+* 不同url
+  * 不同的url，创建独立的NewServer()和SetHandler()
+  * 独立监听自己的信号量
+  * 独立的ConnectionManager

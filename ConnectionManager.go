@@ -8,6 +8,7 @@ import (
 type ConnectionManager struct {
 	connections    map[string][]*Connection
 	connectionLock sync.RWMutex
+	closeChan      chan byte
 	registerChan   chan *Connection
 	unregisterChan chan *Connection
 }
@@ -15,6 +16,7 @@ type ConnectionManager struct {
 func newConnectionManager() *ConnectionManager {
 	connectionManager := &ConnectionManager{
 		connections:    make(map[string][]*Connection),
+		closeChan:      make(chan byte),
 		registerChan:   make(chan *Connection, 10),
 		unregisterChan: make(chan *Connection, 10),
 	}
@@ -30,9 +32,18 @@ func (c *ConnectionManager) listen() {
 		case conn := <-c.registerChan:
 			c.add(conn)
 		case conn := <-c.unregisterChan:
-			c.remove(conn.ConnId)
+			c.remove(conn)
+		case <-c.closeChan:
+			return
 		}
 	}
+}
+
+func (c *ConnectionManager) shutdown() {
+	c.connections = nil
+	close(c.closeChan) //TODO 必须先关闭这个
+	close(c.registerChan)
+	close(c.unregisterChan)
 }
 
 func (c *ConnectionManager) add(conn *Connection) {
@@ -53,17 +64,17 @@ func (c *ConnectionManager) add(conn *Connection) {
 	if !exist {
 		c.connections[conn.GroupId] = append(connectionList, conn)
 	}
-	fmt.Println("[AddConn] groupId=", conn.GroupId, ", connId=", conn.ConnId, ", exist=", exist, ", 连接数量=", len(c.connections[conn.GroupId]))
+	fmt.Println("服务名[", conn.GetServerName(), "]", "[AddConn] groupId=", conn.GroupId, ", connId=", conn.ConnId, ", exist=", exist, ", 连接数量=", len(c.connections[conn.GroupId]))
 }
 
-func (c *ConnectionManager) remove(connId string) {
+func (c *ConnectionManager) remove(conn *Connection) {
 	c.connectionLock.Lock()
 	defer c.connectionLock.Unlock()
 
 	for groupId, value := range c.connections {
 		delIndex := -1
-		for index, conn := range value {
-			if conn.ConnId == connId {
+		for index, item := range value {
+			if item.ConnId == conn.ConnId {
 				delIndex = index
 				break
 			}
@@ -71,7 +82,7 @@ func (c *ConnectionManager) remove(connId string) {
 		if delIndex > -1 {
 			connList := append(value[:delIndex], value[delIndex+1:]...)
 			c.connections[groupId] = connList
-			fmt.Println("[RemoveConn] groupId=", groupId, ", connId=", connId, ", 连接数量=", len(connList))
+			fmt.Println("服务名[", conn.GetServerName(), "]", "[RemoveConn] groupId=", groupId, ", connId=", conn.ConnId, ", 连接数量=", len(connList))
 		}
 	}
 }
