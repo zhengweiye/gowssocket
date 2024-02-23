@@ -170,22 +170,31 @@ func (c *Connection) readLoop() {
 				c.lastContactTime = time.Now()
 			}
 
-			//TODO 这里最好改成协程池的模式
+			// 处理数据
 			if c.handler != nil {
-				go func(msgType int, msgData []byte) {
-					defer func() {
-						if err2 := recover(); err2 != nil {
+				var workerPool *Pool
+				if c.wsServer != nil {
+					workerPool = &c.wsServer.workerPool
+				} else if c.wsClient != nil {
+					workerPool = &c.wsClient.workerPool
+				}
+				if workerPool != nil {
+					jobFunc := func() {
+						defer func() {
+							if err2 := recover(); err2 != nil {
+								c.handler.Error(c, err2)
+							}
+						}()
+						err2 := c.handler.Read(c, WsData{
+							Type: messageType,
+							Data: data,
+						})
+						if err2 != nil {
 							c.handler.Error(c, err2)
 						}
-					}()
-					err2 := c.handler.Read(c, WsData{
-						Type: msgType,
-						Data: msgData,
-					})
-					if err2 != nil {
-						c.handler.Error(c, err2)
 					}
-				}(messageType, data)
+					workerPool.execTask(jobFunc)
+				}
 			}
 		}
 	}

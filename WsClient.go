@@ -2,6 +2,7 @@ package gowssocket
 
 import (
 	"github.com/gorilla/websocket"
+	"runtime"
 	"time"
 )
 
@@ -11,10 +12,14 @@ type WsClient struct {
 	connQueueLength int
 	url             string
 	reconnectPeriod *time.Duration
+	workerPool      Pool
 }
 
 func NewWsClient() *WsClient {
-	return &WsClient{}
+	workerPoolSize := runtime.NumCPU() << 2
+	return &WsClient{
+		workerPool: newPool(workerPoolSize),
+	}
 }
 
 /*
