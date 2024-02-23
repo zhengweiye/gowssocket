@@ -1,6 +1,9 @@
 package gowssocket
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 type Balance interface {
 	Get(num uint32) uint32
@@ -8,17 +11,24 @@ type Balance interface {
 
 type RoundRobinBalance struct {
 	index uint32
+	lock  sync.RWMutex
 }
 
 func newBalance() Balance {
-	return RoundRobinBalance{}
+	return &RoundRobinBalance{}
 }
 
-func (r RoundRobinBalance) Get(num uint32) uint32 {
+func (r *RoundRobinBalance) Get(num uint32) uint32 {
 	newIndex := atomic.AddUint32(&r.index, 1)
 	if newIndex > num {
-		newIndex = 0
-		r.index = 0
+		r.lock.Lock()
+		defer r.lock.Unlock()
+		if newIndex > num {
+			newIndex = 1
+			r.index = 1
+		} else {
+			newIndex = atomic.AddUint32(&r.index, 1)
+		}
 	}
 	return newIndex % num
 }
