@@ -174,9 +174,9 @@ func (c *Connection) readLoop() {
 			if c.handler != nil {
 				var workerPool *Pool
 				if c.wsServer != nil {
-					workerPool = &c.wsServer.workerPool
+					workerPool = c.wsServer.workerPool
 				} else if c.wsClient != nil {
-					workerPool = &c.wsClient.workerPool
+					workerPool = c.wsClient.workerPool
 				}
 				if workerPool != nil {
 					jobFunc := func() {

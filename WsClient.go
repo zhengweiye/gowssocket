@@ -12,7 +12,7 @@ type WsClient struct {
 	connQueueLength int
 	url             string
 	reconnectPeriod *time.Duration
-	workerPool      Pool
+	workerPool      *Pool
 }
 
 func NewWsClient() *WsClient {

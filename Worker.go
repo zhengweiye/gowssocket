@@ -12,8 +12,8 @@ type Worker struct {
 	quitChan chan bool
 }
 
-func newWorker() Worker {
-	return Worker{
+func newWorker() *Worker {
+	return &Worker{
 		JobQueue: make(chan Job, 100),
 		quitChan: make(chan bool, 1),
 	}
@@ -35,21 +35,21 @@ func (w *Worker) run() {
 
 type Pool struct {
 	requestQueue chan Job
-	workers      []Worker
+	workers      []*Worker
 	balance      Balance
 	quitChan     chan bool
 }
 
 var deferRequestQueueSize int = 1000
 
-func newPool(maxWorkers int) Pool {
+func newPool(maxWorkers int) *Pool {
 	if maxWorkers == 0 {
 		maxWorkers = runtime.NumCPU() << 2
 	}
 
-	pool := Pool{
+	pool := &Pool{
 		requestQueue: make(chan Job, deferRequestQueueSize),
-		workers:      make([]Worker, maxWorkers),
+		workers:      make([]*Worker, maxWorkers),
 		balance:      newBalance(),
 		quitChan:     make(chan bool, 1),
 	}

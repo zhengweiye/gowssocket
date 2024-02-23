@@ -24,7 +24,7 @@ type WsServer struct {
 	heartbeatPeriod     *time.Duration
 	heartbeatPeriodOnce sync.Once
 	stopSignal          chan os.Signal
-	workerPool          Pool
+	workerPool          *Pool
 }
 
 var servers map[string]*WsServer
