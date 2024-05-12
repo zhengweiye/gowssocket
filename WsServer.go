@@ -3,11 +3,11 @@ package gowssocket
 import (
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/zhengweiye/gopool"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -24,7 +24,7 @@ type WsServer struct {
 	heartbeatPeriod     *time.Duration
 	heartbeatPeriodOnce sync.Once
 	stopSignal          chan os.Signal
-	workerPool          *Pool
+	workerPool          *gopool.Pool
 }
 
 var servers map[string]*WsServer
@@ -50,7 +50,7 @@ func NewWsServer(name string) *WsServer {
 	fmt.Println(name, "---NewServer........")
 
 	// 创建server
-	workerPoolSize := runtime.NumCPU() << 2
+	//workerPoolSize := runtime.NumCPU() << 2
 	wsServer := &WsServer{
 		Name: name,
 		upgrader: &websocket.Upgrader{
@@ -61,7 +61,7 @@ func NewWsServer(name string) *WsServer {
 		connectionManager: newConnectionManager(),
 		connQueueLength:   100,
 		stopSignal:        make(chan os.Signal, 1),
-		workerPool:        newPool(workerPoolSize),
+		workerPool:        getPool(),
 	}
 
 	// 信号量监听绑定
@@ -187,7 +187,7 @@ func (w *WsServer) Shutdown() {
 	w.connectionManager.shutdown()
 
 	// 回收线程池资源
-	w.workerPool.shutdown()
+	w.workerPool.Shutdown()
 
 	// 从servers移除server
 	serverLock.Lock()

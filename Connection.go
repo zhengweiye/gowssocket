@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/zhengweiye/gopool"
 	"sync"
 	"time"
 )
@@ -172,28 +173,34 @@ func (c *Connection) readLoop() {
 
 			// 处理数据
 			if c.handler != nil {
-				var workerPool *Pool
+				var workerPool *gopool.Pool
 				if c.wsServer != nil {
 					workerPool = c.wsServer.workerPool
 				} else if c.wsClient != nil {
 					workerPool = c.wsClient.workerPool
 				}
 				if workerPool != nil {
-					jobFunc := func() {
+					jobFunc := func(workId int, param map[string]any) (err error) {
 						defer func() {
 							if err2 := recover(); err2 != nil {
 								c.handler.Error(c, err2)
 							}
 						}()
-						err2 := c.handler.Read(c, WsData{
+						err = c.handler.Read(c, WsData{
 							Type: messageType,
 							Data: data,
 						})
-						if err2 != nil {
-							c.handler.Error(c, err2)
+						if err != nil {
+							c.handler.Error(c, err)
 						}
+						return
 					}
-					workerPool.execTask(jobFunc)
+					workerPool.ExecTask(gopool.Job{
+						JobName:   "connection处理",
+						JobFunc:   jobFunc,
+						WaitGroup: nil,
+						JobParam:  nil,
+					})
 				}
 			}
 		}
