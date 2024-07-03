@@ -2,18 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"github.com/zhengweiye/gowssocket"
-	"strconv"
-	"time"
 )
 
 var wsClient *gowssocket.WsClient
 
 func main() {
-	wsClient = gowssocket.NewWsClient()
-	wsClient.SetHandler(NewMyHandler())
-	err := wsClient.Connect("ws://127.0.0.1:8888/ws1?groupId=123")
+	client, err := gowssocket.NewClient("", "ws://127.0.0.1:8888/ws1", nil, nil, nil)
+	fmt.Println(client)
 	if err != nil {
 		panic(err)
 	}
@@ -47,30 +43,19 @@ func NewMyHandler() gowssocket.Handler {
 	return MyHandler{}
 }
 
-func (m MyHandler) Connected(conn *gowssocket.Connection) {
-	fmt.Println("连接进来:", conn.Conn.RemoteAddr().String())
-
-	for i := 0; i < 5; i++ {
-		conn.Send(gowssocket.WsData{
-			Type: websocket.TextMessage,
-			Data: []byte(strconv.Itoa(i)),
-		})
-
-		time.Sleep(8 * time.Second)
-	}
+func (m MyHandler) Connected(conn gowssocket.Connection) {
+	fmt.Println("连接进来:", conn.Conn().RemoteAddr().String())
 }
 
-func (m MyHandler) Read(conn *gowssocket.Connection, data gowssocket.WsData) error {
-	fmt.Println(">>>Read: ", conn.ConnId, ", 类型=", data.Type, ", 内容=", string(data.Data))
+func (m MyHandler) Read(conn gowssocket.Connection, data gowssocket.HandlerData) error {
+	fmt.Println(">>>Read: ", conn.Id(), ", 类型=", data.MessageType, ", 内容=", string(data.MessageData))
 	return nil
 }
 
-func (m MyHandler) Disconnected(conn *gowssocket.Connection, err error) {
-	fmt.Println(">>>Disconnected: ", conn.Conn.RemoteAddr().String(), ", isClose=", conn.IsClose, ", 异常：", err)
-
-	conn.Reconnect()
+func (m MyHandler) Disconnected(conn gowssocket.Connection) {
+	fmt.Println(">>>Disconnected: ", conn.Conn().RemoteAddr().String(), ", isClose=", conn.IsClose())
 }
 
-func (m MyHandler) Error(conn *gowssocket.Connection, err any) {
-	fmt.Println(">>>Error: ", conn.Conn.RemoteAddr().String(), ", 异常：", err)
+func (m MyHandler) Error(conn gowssocket.Connection, err any) {
+	fmt.Println(">>>Error: ", conn.Conn().RemoteAddr().String(), ", 异常：", err)
 }

@@ -1,8 +1,8 @@
 github.com/gorilla/websocket v1.5.1 h1:gmztn0JnHVt9JZquRuzLw3g4wouNVzKL15iLr/zn/QY=
 github.com/gorilla/websocket v1.5.1/go.mod h1:x3kM2JMyaluk02fnUJpQuwD2dCS5NDG2ZHL0uE0tcaY=
-github.com/zhengweiye/gopool v1.0.5 h1:iEBzh/C9DK12R6w+hbpCHZQK3wBqiN8zcR2z9838sPk=
-github.com/zhengweiye/gopool v1.0.5/go.mod h1:3Oq+U0Rj9NkoxAEtvuUC5QCwOqLvwg2O4DvQNEkoOvA=
-github.com/zhengweiye/gopool v1.0.6 h1:SUa5MAWNu/+PNJbsY37AoQy4g1m+sH+1/r9EaA7g26Y=
-github.com/zhengweiye/gopool v1.0.6/go.mod h1:3Oq+U0Rj9NkoxAEtvuUC5QCwOqLvwg2O4DvQNEkoOvA=
+github.com/zhengweiye/gopool v1.0.9 h1:cldcrymJeCDJgwtFqF1RDtII2+C/YbtyMXVcl8bseo8=
+github.com/zhengweiye/gopool v1.0.9/go.mod h1:3Oq+U0Rj9NkoxAEtvuUC5QCwOqLvwg2O4DvQNEkoOvA=
+github.com/zhengweiye/goschedule v1.1.1 h1:NhIynpe1VTwuFNK7n2b36Zz5sooLySGFjnrh3GPXLLk=
+github.com/zhengweiye/goschedule v1.1.1/go.mod h1:1Vbj59QPU68ExE2qPwoHjcUSPt/VweCaK03xNx6IAHs=
 golang.org/x/net v0.21.0 h1:AQyQV4dYCvJ7vGmJyKki9+PBdyvhkSd8EIx/qb0AYv4=
 golang.org/x/net v0.21.0/go.mod h1:bIjVDfnllIU7BJ2DNgfnXvpSvtn8VRwhlsaeUTyUS44=

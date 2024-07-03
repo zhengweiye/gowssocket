@@ -1,84 +1,100 @@
 package gowssocket
 
 import (
+	"context"
+	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/zhengweiye/gopool"
-	"time"
+	"sync"
 )
 
 type WsClient struct {
-	conn            *Connection
+	conn            Connection
 	handler         Handler
-	connQueueLength int
-	url             string
-	reconnectPeriod *time.Duration
-	workerPool      *gopool.Pool
+	pool            *gopool.Pool
+	ctx             context.Context
+	innerWaitGroup  *sync.WaitGroup
+	globalWaitGroup *sync.WaitGroup
+	quitChan        chan bool
+	isShutdown      bool
 }
 
-func NewWsClient() *WsClient {
-	//workerPoolSize := runtime.NumCPU() << 2
-	return &WsClient{
-		workerPool: getPool(),
+/**
+ * （1）一个业务系统可以创建多个Client，每种业务对应一个Client
+ * （2）一个Client对应一个Connection
+ */
+
+func NewClient(group, url string, ctx context.Context, waitGroup *sync.WaitGroup, handler Handler) (client *WsClient, err error) {
+	pool := getPool(ctx, waitGroup)
+	client = &WsClient{
+		handler:         handler,
+		pool:            pool,
+		ctx:             ctx,
+		innerWaitGroup:  &sync.WaitGroup{},
+		globalWaitGroup: waitGroup,
+		quitChan:        make(chan bool),
 	}
-}
 
-/*
-*
-interrupt := make(chan os.Signal, 1)
-
-	signal.Notify(interrupt, os.Interrupt)
-
-case <-interrupt:
-
-	err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	if err != nil {
-	    return
-	}
-	select {
-	    case <-done:
-	    case <-time.After(time.Second):
-	}
+	err = client.connect(group, url)
 	return
-*/
+}
 
-func (w *WsClient) Connect(url string) error {
-	if len(url) == 0 {
-		panic("连接地址为空")
-	}
-	w.url = url
-
+func (w *WsClient) connect(group, url string) (err error) {
+	url = fmt.Sprintf("%s?groupId=%s", url, group)
 	// 连接服务端
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	originConn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 创建connection
-	reconnectPeriod := time.Second * 2
-	if w.reconnectPeriod != nil {
-		reconnectPeriod = *w.reconnectPeriod
-	}
-	wsConn := newConnection("", conn.RemoteAddr().String(), w.connQueueLength, nil, &reconnectPeriod, conn, w.handler, nil, w)
+	wsConn := newConnectionClient(group, url, w, originConn, w.handler, w.pool, w.innerWaitGroup)
 	w.conn = wsConn
 
-	// 监听connection
-	go wsConn.listen()
-
-	return nil
+	// 监听
+	go w.listen()
+	return
 }
 
-func (w *WsClient) SetConnQueueLength(length int) {
-	w.connQueueLength = length
+func (w *WsClient) listen() {
+	for {
+		select {
+		case <-w.quitChan:
+			fmt.Printf(">>> [WebSocket Client] 退出监听...\n")
+			return
+		case <-w.ctx.Done():
+			fmt.Printf(">>> [WebSocket Client] 接受到Context取消信号...\n")
+			if !w.isShutdown {
+				w.Shutdown()
+			}
+		}
+	}
 }
 
-func (w *WsClient) SetHandler(handler Handler) {
-	w.handler = handler
+func (w *WsClient) Shutdown() {
+	w.isShutdown = true
+	fmt.Printf(">>> [WebSocket Client] 正在停止====================================\n")
+
+	// 等待任务执行完成
+	w.innerWaitGroup.Wait()
+
+	// 释放资源
+	w.release()
+
+	// 退出监听
+	close(w.quitChan)
+
+	// 通知业务系统的http服务监听
+	w.globalWaitGroup.Done()
+	fmt.Printf(">>> [WebSocket Client] 完成停止====================================\n")
 }
 
-func (w *WsClient) SetReconnectPeriod(period time.Duration) {
-	w.reconnectPeriod = &period
+func (w *WsClient) release() {
+	// 通知readLoop()和writeLoop()退出
+	w.conn.Close()
+
+	//TODO 回收线程池资源-->如果协程池不是共用，则可以关闭
+	//w.workerPool.Shutdown()
 }
 
-func (w *WsClient) GetConnection() *Connection {
-	return w.conn
-}
+// err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))

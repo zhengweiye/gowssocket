@@ -1,9 +1,14 @@
 package gowssocket
 
-import "github.com/zhengweiye/gopool"
+import (
+	"context"
+	"fmt"
+	"github.com/zhengweiye/gopool"
+	"sync"
+)
 
-var pool *gopool.Pool
-
-func getPool() *gopool.Pool {
-	return gopool.NewPool(1000, 1000)
+func getPool(ctx context.Context, wg *sync.WaitGroup) *gopool.Pool {
+	pool := gopool.NewPool(1000, 1000, ctx, wg)
+	fmt.Printf(">>> [WebSocket] 协程池%p\n", pool)
+	return pool
 }
