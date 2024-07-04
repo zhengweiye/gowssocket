@@ -15,7 +15,7 @@ import (
 type WsServer struct {
 	name              string              // 服务名称
 	upgrader          *websocket.Upgrader // 服务升级
-	handler           Handler             // 特务处理器
+	handler           ServerHandler       // 特务处理器
 	connectionManager *ConnectionManager  // 连接管理器
 	pool              *gopool.Pool        // 协程池
 	timer             *goschedule.Timer
@@ -39,7 +39,8 @@ func init() {
  * （3）通过group对Connection进行分组管理，例如：使用userId作为group，一个账号在不同pc建立Connection，通过userId作为group，可以批量给该分组进行推送数据
  */
 
-func NewServer(name string, ctx context.Context, waitGroup *sync.WaitGroup, handler Handler) *WsServer {
+func NewServer(name string, ctx context.Context, waitGroup *sync.WaitGroup, handler ServerHandler) *WsServer {
+	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>zwy")
 	serverLock.RLock()
 	server, ok := servers[name]
 	if ok {
@@ -94,11 +95,11 @@ func (w *WsServer) Start(response http.ResponseWriter, request *http.Request, he
 	if err != nil {
 		panic(err)
 	}
-	group := url.Query().Get("group")
+	/*group := url.Query().Get("group")
 	if len(group) == 0 {
 		fmt.Println(">>> [WebSocket Server] url缺少group参数")
 		panic("url缺少group参数")
-	}
+	}*/
 
 	// 服务升级
 	/**
@@ -124,10 +125,7 @@ func (w *WsServer) Start(response http.ResponseWriter, request *http.Request, he
 	}
 
 	// 创建connection
-	wsConn := newConnectionServer(group, conn.RemoteAddr().String(), conn, w.handler, w, w.pool, w.innerWaitGroup)
-
-	// 加入ConnectionManager
-	w.connectionManager.add(wsConn)
+	newConnectionServer(url, conn, w.handler, w, w.pool, w.innerWaitGroup)
 }
 
 func (w *WsServer) listen() {
@@ -178,6 +176,7 @@ func (w *WsServer) release() {
 	//TODO 疑问：server如何持续不断的监听客户端进来的呢？
 	//TODO 客户端一个client对应多个conn?那么怎么保存conn
 	//TODO 一些通用的东西
+	//TODO 没有token认证--->是否经过拦截器（不给连接）
 
 	//w.workerPool.Shutdown()
 }

@@ -10,31 +10,29 @@ import (
 
 type ConnectionClient struct {
 	client          *WsClient
-	group           string
 	url             string
 	conn            *websocket.Conn //连接
 	isClose         bool
 	isCloseLock     sync.RWMutex
 	quitChan        chan bool
-	lastContactTime time.Time   //最新通信时间
-	dataChan        chan wsData //消息
-	handler         Handler     //业务处理
+	lastContactTime time.Time     //最新通信时间
+	dataChan        chan wsData   //消息
+	handler         ClientHandler //业务处理
 	props           map[string]any
 	propLock        sync.RWMutex
 	pool            *gopool.Pool
 	waitGroup       *sync.WaitGroup
 }
 
-func newConnectionClient(group, url string,
+func newConnectionClient(url string,
 	client *WsClient,
 	conn *websocket.Conn,
-	handler Handler,
+	handler ClientHandler,
 	pool *gopool.Pool,
 	waitGroup *sync.WaitGroup,
 ) Connection {
 	return &ConnectionClient{
 		client:          client,
-		group:           group,
 		url:             url,
 		conn:            conn,
 		quitChan:        make(chan bool),
@@ -47,20 +45,20 @@ func newConnectionClient(group, url string,
 	}
 }
 
-func (c *ConnectionClient) Id() string {
-	return c.conn.RemoteAddr().String()
-}
-
-func (c *ConnectionClient) Group() string {
-	return c.group
-}
-
 func (c *ConnectionClient) LastTime() time.Time {
 	return c.lastContactTime
 }
 
 func (c *ConnectionClient) Conn() *websocket.Conn {
 	return c.conn
+}
+
+func (c *ConnectionClient) ConnGroup() string {
+	return ""
+}
+
+func (c *ConnectionClient) ConnId() string {
+	return ""
 }
 
 func (c *ConnectionClient) Close() {
@@ -85,7 +83,7 @@ func (c *ConnectionClient) Close() {
 	go func() {
 		defer func() {
 			if err2 := recover(); err2 != nil {
-				fmt.Printf(">>> [WebSocket Client] 连接分组[%s], 连接Id[%s], 断开连接触发回调异常: %v\n", c.Group(), c.Id(), err2)
+				fmt.Printf(">>> [WebSocket Client] 断开连接触发回调异常: %v\n", err2)
 			}
 		}()
 		c.handler.Disconnected(c)
@@ -113,6 +111,8 @@ func (c *ConnectionClient) Send(data []byte) {
 	}
 }
 
+//TODO 有bug
+
 func (c *ConnectionClient) Reconnect() {
 	c.isCloseLock.Lock()
 	defer c.isCloseLock.Unlock()
@@ -122,7 +122,7 @@ func (c *ConnectionClient) Reconnect() {
 		for {
 			select {
 			case <-ticker.C:
-				err := c.client.connect(c.Group(), c.url) // 其实还是共用同一个wsClient,只是里面的conn更改了而已
+				err := c.client.connect(c.url) // 其实还是共用同一个wsClient,只是里面的conn更改了而已
 				if err == nil {
 					ticker.Stop()
 					return

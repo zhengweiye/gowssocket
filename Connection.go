@@ -6,10 +6,10 @@ import (
 )
 
 type Connection interface {
-	Id() string
-	Group() string
 	LastTime() time.Time
 	Conn() *websocket.Conn
+	ConnGroup() string
+	ConnId() string
 	Close()
 	IsClose() bool
 	Send(data []byte)

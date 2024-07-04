@@ -1,10 +1,17 @@
 package gowssocket
 
-type Handler interface {
+import "net/url"
+
+type ServerHandler interface {
+	Connected(conn Connection, connManager *ConnectionManager, url *url.URL)
+	Do(conn Connection, data HandlerData) error
+	Disconnected(conn Connection, connManager *ConnectionManager)
+}
+
+type ClientHandler interface {
 	Connected(conn Connection)
-	Read(conn Connection, data HandlerData) error
+	Do(conn Connection, data HandlerData) error
 	Disconnected(conn Connection)
-	Error(conn Connection, err any)
 }
 
 type HandlerData struct {

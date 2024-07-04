@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/zhengweiye/gowssocket"
+	"sync"
 )
 
 var wsClient *gowssocket.WsClient
 
 func main() {
-	client, err := gowssocket.NewClient("", "ws://127.0.0.1:8888/ws1", nil, nil, nil)
+	ctx, _ := context.WithCancel(context.Background())
+	waitGroup := &sync.WaitGroup{}
+	client, err := gowssocket.NewClient("test", "ws://127.0.0.1:8888/ws1", ctx, waitGroup, NewMyHandler())
 	fmt.Println(client)
 	if err != nil {
 		panic(err)
@@ -39,7 +43,7 @@ func main() {
 type MyHandler struct {
 }
 
-func NewMyHandler() gowssocket.Handler {
+func NewMyHandler() gowssocket.ClientHandler {
 	return MyHandler{}
 }
 
@@ -47,15 +51,11 @@ func (m MyHandler) Connected(conn gowssocket.Connection) {
 	fmt.Println("连接进来:", conn.Conn().RemoteAddr().String())
 }
 
-func (m MyHandler) Read(conn gowssocket.Connection, data gowssocket.HandlerData) error {
-	fmt.Println(">>>Read: ", conn.Id(), ", 类型=", data.MessageType, ", 内容=", string(data.MessageData))
+func (m MyHandler) Do(conn gowssocket.Connection, data gowssocket.HandlerData) error {
+	fmt.Println(">>>Read: ", conn.ConnId(), ", 类型=", data.MessageType, ", 内容=", string(data.MessageData))
 	return nil
 }
 
 func (m MyHandler) Disconnected(conn gowssocket.Connection) {
 	fmt.Println(">>>Disconnected: ", conn.Conn().RemoteAddr().String(), ", isClose=", conn.IsClose())
-}
-
-func (m MyHandler) Error(conn gowssocket.Connection, err any) {
-	fmt.Println(">>>Error: ", conn.Conn().RemoteAddr().String(), ", 异常：", err)
 }

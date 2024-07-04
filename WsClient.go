@@ -10,7 +10,7 @@ import (
 
 type WsClient struct {
 	conn            Connection
-	handler         Handler
+	handler         ClientHandler
 	pool            *gopool.Pool
 	ctx             context.Context
 	innerWaitGroup  *sync.WaitGroup
@@ -24,7 +24,7 @@ type WsClient struct {
  * （2）一个Client对应一个Connection
  */
 
-func NewClient(group, url string, ctx context.Context, waitGroup *sync.WaitGroup, handler Handler) (client *WsClient, err error) {
+func NewClient(group, url string, ctx context.Context, waitGroup *sync.WaitGroup, handler ClientHandler) (client *WsClient, err error) {
 	pool := getPool(ctx, waitGroup)
 	client = &WsClient{
 		handler:         handler,
@@ -35,12 +35,11 @@ func NewClient(group, url string, ctx context.Context, waitGroup *sync.WaitGroup
 		quitChan:        make(chan bool),
 	}
 
-	err = client.connect(group, url)
+	err = client.connect(url)
 	return
 }
 
-func (w *WsClient) connect(group, url string) (err error) {
-	url = fmt.Sprintf("%s?groupId=%s", url, group)
+func (w *WsClient) connect(url string) (err error) {
 	// 连接服务端
 	originConn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -48,7 +47,7 @@ func (w *WsClient) connect(group, url string) (err error) {
 	}
 
 	// 创建connection
-	wsConn := newConnectionClient(group, url, w, originConn, w.handler, w.pool, w.innerWaitGroup)
+	wsConn := newConnectionClient(url, w, originConn, w.handler, w.pool, w.innerWaitGroup)
 	w.conn = wsConn
 
 	// 监听

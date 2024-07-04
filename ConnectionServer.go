@@ -4,21 +4,23 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/zhengweiye/gopool"
+	"net/url"
 	"sync"
 	"time"
 )
 
 type ConnectionServer struct {
 	server          *WsServer
-	group           string
+	clientIp        string
+	connGroup       string
 	connId          string
 	conn            *websocket.Conn //连接
 	isClose         bool
 	isCloseLock     sync.RWMutex
 	quitChan        chan bool
-	lastContactTime time.Time   //最新通信时间
-	dataChan        chan wsData //消息
-	handler         Handler     //业务处理
+	lastContactTime time.Time     //最新通信时间
+	dataChan        chan wsData   //消息
+	handler         ServerHandler //业务处理
 	props           map[string]any
 	propLock        sync.RWMutex
 	pool            *gopool.Pool
@@ -39,18 +41,18 @@ type wsData struct {
 	waitGroup   *sync.WaitGroup
 }
 
-func newConnectionServer(group, connId string,
+func newConnectionServer(
+	url *url.URL,
 	conn *websocket.Conn,
-	handler Handler,
+	handler ServerHandler,
 	server *WsServer,
 	pool *gopool.Pool,
 	waitGroup *sync.WaitGroup,
-) Connection {
-	fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s]\n", group, connId)
+) {
+	fmt.Printf(">>> [WebSocket Server] 连接Id[%s]\n", conn.RemoteAddr().String())
 	connWrap := &ConnectionServer{
 		server:          server,
-		group:           group,
-		connId:          connId,
+		clientIp:        conn.RemoteAddr().String(),
 		conn:            conn,
 		quitChan:        make(chan bool),
 		lastContactTime: time.Now(),
@@ -62,19 +64,10 @@ func newConnectionServer(group, connId string,
 	}
 
 	// 回调函数执行
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s], 连接成功触发回调异常: %v\n", group, connId, err)
-			}
-		}()
-		connWrap.handler.Connected(connWrap)
-	}()
+	connWrap.handler.Connected(connWrap, connWrap.server.connectionManager, url)
 
 	// 连接监听
 	connWrap.listen()
-
-	return connWrap
 }
 
 func (c *ConnectionServer) listen() {
@@ -85,20 +78,28 @@ func (c *ConnectionServer) listen() {
 	go c.writeLoop()
 }
 
-func (c *ConnectionServer) Id() string {
-	return c.connId
-}
-
-func (c *ConnectionServer) Group() string {
-	return c.group
-}
-
 func (c *ConnectionServer) LastTime() time.Time {
 	return c.lastContactTime
 }
 
+func (c *ConnectionServer) setConnId(id string) {
+	c.connId = id
+}
+
+func (c *ConnectionServer) setConnGroup(group string) {
+	c.connGroup = group
+}
+
 func (c *ConnectionServer) Conn() *websocket.Conn {
 	return c.conn
+}
+
+func (c *ConnectionServer) ConnGroup() string {
+	return c.connGroup
+}
+
+func (c *ConnectionServer) ConnId() string {
+	return c.connId
 }
 
 func (c *ConnectionServer) Close() {
@@ -119,21 +120,16 @@ func (c *ConnectionServer) Close() {
 	// 关闭dataChan
 	close(c.dataChan)
 
-	// 回调函数执行
-	go func() {
-		defer func() {
-			if err2 := recover(); err2 != nil {
-				fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s], 断开连接触发回调异常: %v\n", c.Group(), c.Id(), err2)
-			}
-		}()
-		c.handler.Disconnected(c)
-	}()
-
 	// 关闭底层conn-->放到最后，因为正在处理的任务还可能需要响应给客户端
-	c.conn.Close()
-
-	// 从连接管理器移除-->放到最后，因为正在处理的任务还可能需要响应给客户端
-	c.server.connectionManager.remove(c)
+	defer func() {
+		if err2 := recover(); err2 != nil {
+			fmt.Printf(">>> [WebSocket Server] 客户端IP[%s], 断开连接触发回调异常: %v\n", c.clientIp, err2)
+		}
+		err := c.conn.Close()
+		fmt.Printf(">>> [WebSocket Server] 客户端IP[%s], 关闭底层连接异常: %v\n", c.clientIp, err)
+	}()
+	// 回调函数执行
+	c.handler.Disconnected(c, c.server.connectionManager)
 }
 
 func (c *ConnectionServer) IsClose() bool {
@@ -161,7 +157,11 @@ func (c *ConnectionServer) writeLoop() {
 		case <-c.quitChan:
 			return
 		case data := <-c.dataChan:
-			c.processResponse(data)
+			err := c.processResponse(data)
+			if err != nil {
+				fmt.Printf(">>> [WebSocket Server] 客户端IP[%s], 响应数据异常: %v\n", c.clientIp, err)
+				return
+			}
 		}
 	}
 }
@@ -176,7 +176,7 @@ func (c *ConnectionServer) readLoop() {
 			//TODO 堵塞，等待对方发送数据，通过查看源码得知，不能接受PingMessage和PongMessage
 			messageType, data, err := c.conn.ReadMessage()
 			if err != nil {
-				fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s], 读取数据异常: %v\n", c.Group(), c.Id(), err)
+				fmt.Printf(">>> [WebSocket Server] 客户端IP[%s], 读取数据异常: %v\n", c.clientIp, err)
 				return
 			}
 
@@ -199,19 +199,19 @@ func (c *ConnectionServer) readLoop() {
 	}
 }
 
-func (c *ConnectionServer) processResponse(data wsData) {
+func (c *ConnectionServer) processResponse(data wsData) (err error) {
 	data.waitGroup.Add(1)
 	defer data.waitGroup.Done()
 
 	// 往客户端推送数据--->不能使用子协程去执行，否则会出现粘包现象
-	err := c.conn.WriteMessage(data.messageType, data.messageData)
+	err = c.conn.WriteMessage(data.messageType, data.messageData)
 	if err != nil {
-		fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s], 响应数据异常: %v\n", c.Group(), c.Id(), err)
 		return
 	}
 
 	// 更新最新通信时间
 	c.lastContactTime = time.Now()
+	return
 }
 
 func (c *ConnectionServer) processRequest(workerId int, jobName string, param map[string]any) (err error) {
@@ -221,17 +221,16 @@ func (c *ConnectionServer) processRequest(workerId int, jobName string, param ma
 
 	defer func() {
 		if err2 := recover(); err2 != nil {
-			fmt.Printf(">>> [WebSocket Server] 连接分组[%s], 连接Id[%s], 处理业务时异常：%v\n", c.Group(), c.Id(), err)
-			c.handler.Error(c, err2)
+			fmt.Printf(">>> [WebSocket Server] 客户端IP[%s], 处理业务时异常：%v\n", c.clientIp, err)
 		}
 	}()
 
-	err = c.handler.Read(c, HandlerData{
+	err = c.handler.Do(c, HandlerData{
 		MessageData: data.messageData,
 		MessageType: data.messageType,
 	})
 	if err != nil {
-		c.handler.Error(c, err)
+		panic(err)
 	}
 	return
 }
